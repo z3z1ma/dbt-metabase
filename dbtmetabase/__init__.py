@@ -75,6 +75,7 @@ def models(
     # Process dbt stuff
     dbt_models = reader.read_models(
         database=dbt_config.database,
+        project_name=dbt_config.project_name,
         schema=dbt_config.schema,
         schema_excludes=dbt_config.schema_excludes,
         includes=dbt_config.includes,
@@ -153,6 +154,7 @@ def exposures(
     # Process dbt stuff
     dbt_models = reader.read_models(
         database=dbt_config.database,
+        project_name=dbt_config.project_name,
         schema=dbt_config.schema,
         schema_excludes=dbt_config.schema_excludes,
         includes=dbt_config.includes,
@@ -193,7 +195,6 @@ def main(args: List = None):
         action="version",
         version=f"%(prog)s {__version__}",
     )
-    parser.add_argument("command", choices=["export"], help="command to execute")
 
     # Commands
     parser.add_argument(
@@ -220,6 +221,11 @@ def main(args: List = None):
     group.add_argument(
         "--dbt_manifest_path",
         help="Path to dbt manifest.json (typically located in the /target/ directory of the dbt project directory). Cannot be specified with --dbt_path",
+    )
+    parser_dbt.add_argument(
+        "--dbt_project_name",
+        help="Project name as specified in dbt_project.yml",
+        required=True,
     )
     parser_dbt.add_argument(
         "--dbt_schema",
@@ -350,6 +356,7 @@ def main(args: List = None):
     dbt_config = DbtConfig(
         path=parsed.dbt_path,
         manifest_path=parsed.dbt_manifest_path,
+        project_name=parsed.dbt_project_name,
         database=parsed.dbt_database,
         schema=parsed.dbt_schema,
         schema_excludes=parsed.dbt_schema_excludes,

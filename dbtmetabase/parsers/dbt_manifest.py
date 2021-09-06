@@ -25,6 +25,7 @@ class DbtManifestReader:
 
     def read_models(
         self,
+        project_name: str,
         database: str,
         schema: str = None,
         schema_excludes: Iterable = None,
@@ -96,7 +97,12 @@ class DbtManifestReader:
                 continue
 
             mb_models.append(
-                self._read_model(node, include_tags=include_tags, docs_url=docs_url)
+                self._read_model(
+                    node,
+                    include_tags=include_tags,
+                    docs_url=docs_url,
+                    project_name=project_name,
+                )
             )
 
         for _, node in self.manifest["sources"].items():
@@ -148,6 +154,7 @@ class DbtManifestReader:
                     docs_url=docs_url,
                     model_key="sources",
                     source=node["source_name"],
+                    project_name=project_name,
                 )
             )
 
@@ -156,6 +163,7 @@ class DbtManifestReader:
     def _read_model(
         self,
         model: dict,
+        project_name: str,
         include_tags: bool = True,
         docs_url: Optional[str] = None,
         model_key: Literal["nodes", "sources"] = "nodes",
@@ -227,10 +235,13 @@ class DbtManifestReader:
 
         if model_key == "nodes":
             ref = f"ref('{model.get('identifier', model['name'])}')"
+            model_id = f"model.{project_name}.{model.get('identifier', model['name'])}"
         elif model_key == "sources":
             ref = f"source('{source}', '{model['name']}')"
+            model_id = f"source.{project_name}.{source}.{model['name']}"
         else:
             ref = None
+            model_id = None
 
         return MetabaseModel(
             name=model.get("alias", model.get("identifier", model.get("name"))).upper(),
@@ -238,6 +249,7 @@ class DbtManifestReader:
             description=description,
             columns=mb_columns,
             model_key=model_key,
+            model_id=model_id,
             ref=ref,
         )
 

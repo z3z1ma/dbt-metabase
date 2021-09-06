@@ -28,6 +28,7 @@ class DbtFolderReader:
 
     def read_models(
         self,
+        project_name: str,
         database: Optional[str] = None,
         schema: Optional[str] = None,
         schema_excludes: Iterable = None,
@@ -79,6 +80,7 @@ class DbtFolderReader:
                                 schema.upper(),
                                 include_tags=include_tags,
                                 model_key="nodes",
+                                project_name=project_name,
                             )
                         )
                 for source in schema_file.get("sources", []):
@@ -104,6 +106,7 @@ class DbtFolderReader:
                                     include_tags=include_tags,
                                     model_key="sources",
                                     source=source["name"],
+                                    project_name=project_name,
                                 )
                             )
 
@@ -113,6 +116,7 @@ class DbtFolderReader:
         self,
         model: dict,
         schema: str,
+        project_name: str,
         include_tags: bool = True,
         model_key: Literal["nodes", "sources"] = "nodes",
         source: str = None,
@@ -143,10 +147,13 @@ class DbtFolderReader:
 
         if model_key == "nodes":
             ref = f"ref('{model.get('identifier', model['name'])}')"
+            model_id = f"model.{project_name}.{model.get('identifier', model['name'])}"
         elif model_key == "sources":
             ref = f"source('{source}', '{model['name']}')"
+            model_id = f"source.{project_name}.{source}.{model['name']}"
         else:
             ref = None
+            model_id = None
 
         return MetabaseModel(
             # We are implicitly complying with aliases by doing this
@@ -155,6 +162,7 @@ class DbtFolderReader:
             description=description,
             columns=mb_columns,
             model_key=model_key,
+            model_id=model_id,
             ref=ref,
         )
 

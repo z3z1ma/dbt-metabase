@@ -21,6 +21,7 @@ class MetabaseConfig:
 class DbtConfig:
     # dbt Reader
     database: str
+    project_name: str
     manifest_path: Optional[str] = None
     path: Optional[str] = None
     # dbt Target Models
