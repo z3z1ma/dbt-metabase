@@ -1,5 +1,7 @@
 import json
 import logging
+from .logger import logger
+
 from typing import (
     Sequence,
     Optional,
@@ -54,12 +56,13 @@ class MetabaseClient:
         self.tables: Iterable = []
         self.table_map: MutableMapping = {}
         self.models_exposed: List = []
+        self.refable_models: MutableMapping = {}
         self.native_query: str = ""
         self.exposure_parser = re.compile(r"[FfJj][RrOo][OoIi][MmNn]\s+\b(\w+)\b")
         self.cte_parser = re.compile(
             r"[Ww][Ii][Tt][Hh]\s+\b(\w+)\b\s+as|[)]\s*[,]\s*\b(\w+)\b\s+as"
         )
-        logging.info("Session established successfully")
+        logger().info(" ✔️  Session established successfully")
 
     def get_session_id(self, user: str, password: str) -> str:
         """Obtains new session ID from API.
@@ -101,8 +104,8 @@ class MetabaseClient:
             timeout = 30
 
         if timeout < self._SYNC_PERIOD_SECS:
-            logging.critical(
-                "Timeout provided %d secs, must be at least %d",
+            logger().critical(
+                " ❗  Timeout provided %d secs, must be at least %d",
                 timeout,
                 self._SYNC_PERIOD_SECS,
             )
@@ -110,7 +113,7 @@ class MetabaseClient:
 
         database_id = self.find_database_id(database)
         if not database_id:
-            logging.critical("Cannot find database by name %s", database)
+            logger().critical(" ❗  Cannot find database by name %s", database)
             return False
 
         self.api("post", f"/api/database/{database_id}/sync_schema")
@@ -148,8 +151,8 @@ class MetabaseClient:
             lookup_key = f"{schema_name}.{model_name}"
 
             if lookup_key not in field_lookup:
-                logging.warning(
-                    "Model %s not found in %s schema", lookup_key, schema_name
+                logger().warning(
+                    " ❌  Model %s not found in %s schema", lookup_key, schema_name
                 )
                 are_models_compatible = False
             else:
@@ -157,8 +160,10 @@ class MetabaseClient:
                 for column in model.columns:
                     column_name = column.name.upper()
                     if column_name not in table_lookup:
-                        logging.warning(
-                            "Column %s not found in %s model", column_name, lookup_key
+                        logger().warning(
+                            " ❌  Column %s not found in %s model",
+                            column_name,
+                            lookup_key,
                         )
                         are_models_compatible = False
 
@@ -180,7 +185,7 @@ class MetabaseClient:
 
         database_id = self.find_database_id(database)
         if not database_id:
-            logging.critical("Cannot find database by name %s", database)
+            logger().critical(" ❌  Cannot find database by name %s", database)
             return
 
         table_lookup, field_lookup = self.build_metadata_lookups(database_id)
@@ -211,7 +216,7 @@ class MetabaseClient:
 
         api_table = table_lookup.get(lookup_key)
         if not api_table:
-            logging.error("Table %s does not exist in Metabase", lookup_key)
+            logger().error(" ❌  Table %s does not exist in Metabase", lookup_key)
             return
 
         # Empty strings not accepted by Metabase
@@ -228,11 +233,11 @@ class MetabaseClient:
                 f"/api/table/{table_id}",
                 json={"description": model_description},
             )
-            logging.info("Updated table %s successfully", lookup_key)
+            logger().info(" ✔️  Updated table %s successfully", lookup_key)
         elif not model_description:
-            logging.info("No model description provided for table %s", lookup_key)
+            logger().info(" 🤔  No model description provided for table %s", lookup_key)
         else:
-            logging.info("Table %s is up-to-date", lookup_key)
+            logger().info(" 🤙🏼  Table %s is up-to-date", lookup_key)
 
         for column in model.columns:
             self.export_column(schema_name, model_name, column, field_lookup, aliases)
@@ -259,8 +264,10 @@ class MetabaseClient:
 
         field = field_lookup.get(table_lookup_key, {}).get(column_name)
         if not field:
-            logging.error(
-                "Field %s.%s does not exist in Metabase", table_lookup_key, column_name
+            logger().error(
+                " ❌  Field %s.%s does not exist in Metabase",
+                table_lookup_key,
+                column_name,
             )
             return
 
@@ -289,8 +296,8 @@ class MetabaseClient:
             )
 
             if not target_table or not target_field:
-                logging.info(
-                    "Passing on fk resolution for %s. Target field %s was not resolved during dbt model parsing.",
+                logger().info(
+                    " ➡️  Passing on fk resolution for %s. Target field %s was not resolved during dbt model parsing.",
                     table_lookup_key,
                     target_field,
                 )
@@ -308,16 +315,16 @@ class MetabaseClient:
                         [target_table.split(".", 1)[0], was_aliased]
                     )
 
-                logging.info(
-                    "Looking for field %s in table %s", target_field, target_table
+                logger().info(
+                    " 🔧  Looking for field %s in table %s", target_field, target_table
                 )
                 fk_target_field_id = (
                     field_lookup.get(target_table, {}).get(target_field, {}).get("id")
                 )
 
                 if fk_target_field_id:
-                    logging.info(
-                        "Setting target field %s to PK in order to facilitate FK ref for %s column",
+                    logger().info(
+                        " ⚙️  Setting target field %s to PK in order to facilitate FK ref for %s column",
                         fk_target_field_id,
                         column_name,
                     )
@@ -327,8 +334,8 @@ class MetabaseClient:
                         json={semantic_type: "type/PK"},
                     )
                 else:
-                    logging.error(
-                        "Unable to find foreign key target %s.%s",
+                    logger().error(
+                        " 🤕  Unable to find foreign key target %s.%s",
                         target_table,
                         target_field,
                     )
@@ -360,9 +367,11 @@ class MetabaseClient:
                     "fk_target_field_id": fk_target_field_id,
                 },
             )
-            logging.info("Updated field %s.%s successfully", model_name, column_name)
+            logger().info(
+                " ✔️  Updated field %s.%s successfully", model_name, column_name
+            )
         else:
-            logging.info("Field %s.%s is up-to-date", model_name, column_name)
+            logger().info(" ⭐  Field %s.%s is up-to-date", model_name, column_name)
 
     def find_database_id(self, name: str) -> Optional[str]:
         """Finds Metabase database ID by name.
@@ -414,8 +423,8 @@ class MetabaseClient:
                 }
 
                 if table_schema in schemas_to_exclude:
-                    logging.debug(
-                        "Ignoring Metabase table %s in schema %s. It belongs to excluded schemas %s",
+                    logger().debug(
+                        " ⏭️  Ignoring Metabase table %s in schema %s. It belongs to excluded schemas %s",
                         table_name,
                         table_schema,
                         schemas_to_exclude,
@@ -441,6 +450,9 @@ class MetabaseClient:
         output_name: str = "metabase_exposures",
         include_personal_collections: bool = True,
         collection_excludes: Iterable = None,
+        modify_manifest: bool = True,
+        manifest_path: Optional[str] = "manifest.json",
+        dbt_project_name: Optional[str] = "source_reporting_dbt",
     ) -> Mapping:
         """Extracts exposures in Metabase downstream of dbt models and sources as parsed by dbt reader
 
@@ -464,10 +476,18 @@ class MetabaseClient:
                 indentless = False
                 return super(DbtDumper, self).increase_indent(flow, indentless)
 
+        manifest = {}
+        if modify_manifest:
+            # Modify the manifest
+            with open(os.path.join(manifest_path), "r") as f:
+                manifest = json.load(f)
+
         if collection_excludes is None:
             collection_excludes = []
 
-        refable_models = {node.name: node.ref for node in models}
+        self.refable_models = {
+            node.name: {"ref": node.ref, "unique_id": node.model_id} for node in models
+        }
 
         self.collections = self.api("get", "/api/collection")
         self.tables = self.api("get", "/api/table")
@@ -487,7 +507,7 @@ class MetabaseClient:
                 continue
 
             # Iter through collection
-            logging.info("Exploring collection %s", collection["name"])
+            logger().info(" 🔍 Exploring collection %s 🔍", collection["name"])
             for item in self.api("get", f"/api/collection/{collection['id']}/items"):
 
                 # Ensure collection item is of parsable type
@@ -503,7 +523,7 @@ class MetabaseClient:
 
                 exposure = self.api("get", f"/api/{exposure_type}/{exposure_id}")
                 exposure_name = exposure.get("name", "Exposure [Unresolved Name]")
-                logging.info("Introspecting exposure: %s", exposure_name)
+                logger().info(" 🕵  Introspecting exposure: %s", exposure_name)
 
                 # Process exposure
                 if exposure_type == "card":
@@ -552,36 +572,82 @@ class MetabaseClient:
                     exposure_name = f"{exposure_name}_{enumer}"
                     enumer += 1
 
-                # Construct exposure
-                parsed_exposures.append(
-                    self._build_exposure(
-                        exposure_type=exposure_type,
-                        exposure_id=exposure_id,
-                        name=exposure_name,
-                        header=header,
-                        created_at=exposure["created_at"],
-                        creator_name=creator_name,
-                        creator_email=creator_email,
-                        refable_models=refable_models,
-                        description=exposure.get("description", ""),
-                        native_query=native_query,
-                    )
+                if not self.models_exposed:
+                    logger().info(" ❌ No models found for exposure")
+
+                base_exposure = self._build_exposure(
+                    exposure_type=exposure_type,
+                    exposure_id=exposure_id,
+                    name=exposure_name,
+                    header=header,
+                    created_at=exposure["created_at"],
+                    creator_name=creator_name,
+                    creator_email=creator_email,
+                    description=exposure.get("description", ""),
+                    native_query=native_query,
                 )
+
+                # Construct exposure
+                parsed_exposures.append(base_exposure)
+
+                if modify_manifest:
+                    # Manifest requires some details not needed in yaml
+                    unique_exposed_models = list(
+                        {_model for _model in self.models_exposed}
+                    )
+                    unique_exposed_model_ids = [
+                        self.refable_models[node.upper()]["unique_id"]
+                        for node in unique_exposed_models
+                    ]
+                    unique_id = f"exposure.{dbt_project_name}.{exposure_name}"
+                    base_exposure["fqn"] = [dbt_project_name, exposure_name]
+                    base_exposure["unique_id"] = unique_id
+                    base_exposure["root_path"] = ""
+                    base_exposure["path"] = ""
+                    base_exposure["original_file_path"] = ""
+                    base_exposure["resource_type"] = "exposure"
+                    base_exposure["depends_on"] = {
+                        "macros": [],
+                        "nodes": unique_exposed_model_ids,
+                    }
+                    base_exposure["refs"] = [
+                        self.refable_models[node.upper()]["unique_id"]
+                        for node in unique_exposed_models
+                        if self.refable_models[node.upper()]["unique_id"].startswith(
+                            "nodes"
+                        )
+                    ]
+                    base_exposure["sources"] = [
+                        self.refable_models[node.upper()]["unique_id"]
+                        for node in unique_exposed_models
+                        if self.refable_models[node.upper()]["unique_id"].startswith(
+                            "sources"
+                        )
+                    ]
+                    base_exposure["created_at"] = int(time.time())
+                    manifest["exposures"][unique_id] = base_exposure
+                    manifest["parent_map"][unique_id] = unique_exposed_model_ids
 
                 documented_exposure_names.append(exposure_name)
 
-        # Output dbt YAML
-        with open(
-            os.path.expanduser(os.path.join(output_path, f"{output_name}.yml")), "w"
-        ) as docs:
-            yaml.dump(
-                {"version": _RESOURCE_VERSION, "exposures": parsed_exposures},
-                docs,
-                Dumper=DbtDumper,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-            )
+        if modify_manifest:
+            # Modify the manifest
+            with open(os.path.join(manifest_path), "w") as f:
+                f.write(json.dumps(manifest))
+
+        else:
+            # Output dbt YAML
+            with open(
+                os.path.expanduser(os.path.join(output_path, f"{output_name}.yml")), "w"
+            ) as docs:
+                yaml.dump(
+                    {"version": _RESOURCE_VERSION, "exposures": parsed_exposures},
+                    docs,
+                    Dumper=DbtDumper,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
 
         # Return object
         return {"version": _RESOURCE_VERSION, "exposures": parsed_exposures}
@@ -618,8 +684,8 @@ class MetabaseClient:
                 # Normal question
                 source_table = self.table_map.get(source_table_id)
                 if source_table:
-                    logging.info(
-                        "Model extracted from Metabase question: %s",
+                    logger().info(
+                        " ✔️  Model extracted from Metabase question: %s",
                         source_table,
                     )
                     self.models_exposed.append(source_table)
@@ -637,8 +703,8 @@ class MetabaseClient:
                 # Joined model parsed
                 joined_table = self.table_map.get(query_join.get("source-table"))
                 if joined_table:
-                    logging.info(
-                        "Model extracted from Metabase question join: %s",
+                    logger().info(
+                        " ✔️  Model extracted from Metabase question join: %s",
                         joined_table,
                     )
                     self.models_exposed.append(joined_table)
@@ -659,12 +725,15 @@ class MetabaseClient:
                 clean_exposure = sql_ref.split(".")[-1].strip('"')
 
                 # Scrub CTEs for cleanliness sake
-                if clean_exposure in ctes:
+                if (
+                    clean_exposure in ctes
+                    or not clean_exposure.upper() in self.refable_models
+                ):
                     continue
 
                 if clean_exposure:
-                    logging.info(
-                        "Model extracted from native query: %s",
+                    logger().info(
+                        " ✔️  Model extracted from native query: %s",
                         clean_exposure,
                     )
                     self.models_exposed.append(clean_exposure)
@@ -679,7 +748,6 @@ class MetabaseClient:
         created_at: str,
         creator_name: str,
         creator_email: str,
-        refable_models: Mapping,
         description: str = "",
         native_query: str = "",
     ) -> Mapping:
@@ -693,7 +761,6 @@ class MetabaseClient:
             created_at {str} -- Timestamp of exposure creation derived from Metabase
             creator_name {str} -- Creator name derived from Metabase
             creator_email {str} -- Creator email derived from Metabase
-            refable_models {str} -- List of dbt models from dbt parser which can validly be referenced, parsed exposures are always checked against this list to avoid generating invalid yaml
 
         Keyword Arguments:
             description {str} -- The description of the exposure as documented in Metabase. (default: No description provided in Metabase)
@@ -746,9 +813,8 @@ class MetabaseClient:
                 "email": creator_email,
             },
             "depends_on": [
-                refable_models[exposure.upper()]
+                self.refable_models[exposure.upper()]["ref"]
                 for exposure in list({m for m in self.models_exposed})
-                if exposure.upper() in refable_models
             ],
         }
 
@@ -792,10 +858,12 @@ class MetabaseClient:
                 response.raise_for_status()
             except requests.exceptions.HTTPError:
                 if "password" in kwargs["json"]:
-                    logging.error("HTTP request failed. Response: %s", response.text)
+                    logger().error(
+                        " ❌  HTTP request failed. Response: %s", response.text
+                    )
                 else:
-                    logging.error(
-                        "HTTP request failed. Payload: %s. Response: %s",
+                    logger().error(
+                        " ❌  HTTP request failed. Payload: %s. Response: %s",
                         kwargs["json"],
                         response.text,
                     )
