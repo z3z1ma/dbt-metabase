@@ -26,6 +26,7 @@ class MetabaseModel:
     schema: str
     description: str = ""
     model_key: Literal["nodes", "sources"] = "nodes"
+    model_id: Optional[str] = None
     ref: Optional[str] = None
 
     columns: Sequence[MetabaseColumn] = field(default_factory=list)
