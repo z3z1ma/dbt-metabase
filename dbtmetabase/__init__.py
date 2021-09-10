@@ -174,6 +174,7 @@ def exposures(
     # Process Metabase stuff
     mbc.extract_exposures(
         models=dbt_models,
+        dbt_project_name=dbt_config.project_name,
         output_path=output_path,
         output_name=output_name,
         include_personal_collections=include_personal_collections,

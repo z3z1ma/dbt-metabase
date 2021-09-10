@@ -446,24 +446,27 @@ class MetabaseClient:
     def extract_exposures(
         self,
         models: List[MetabaseModel],
+        dbt_project_name: str,
         output_path: str = ".",
         output_name: str = "metabase_exposures",
         include_personal_collections: bool = True,
         collection_excludes: Iterable = None,
-        modify_manifest: bool = True,
+        modify_manifest: bool = False,
         manifest_path: Optional[str] = "manifest.json",
-        dbt_project_name: Optional[str] = "source_reporting_dbt",
     ) -> Mapping:
         """Extracts exposures in Metabase downstream of dbt models and sources as parsed by dbt reader
 
         Arguments:
             models {List[MetabaseModel]} -- List of models as output by dbt reader
+            dbt_project_name {str} -- Name of dbt project
 
         Keyword Arguments:
             output_path {str} -- The path to output the generated yaml. (default: ".")
-            output_name {str} -- The name of the generated yaml. (default: {"metabase_exposures"})
+            output_name {str} -- The name of the generated yaml, used when modify_manifest is False. (default: {"metabase_exposures"})
             include_personal_collections {bool} -- Include personal collections in Metabase processing. (default: {True})
             collection_excludes {str} -- List of collections to exclude by name. (default: {None})
+            modify_manifest {bool} -- Switch to manipulate `manifest.json` instead of outputting a YAML file. (default: {False})
+            manifest_path {str} -- Used when modify_manifest is True to specify path to manifest.json (default: {"manifest.json"})
 
         Returns:
             List[Mapping] -- JSON object representation of all exposures parsed.
@@ -659,7 +662,7 @@ class MetabaseClient:
             card_id {int} -- Id of Metabase question used to pull question from api
 
         Keyword Arguments:
-            exposure {str} -- JSON api response from a question in Metabase, allows us to use the object if already in memory
+            exposure {Optional[Mapping]} -- JSON api response from a question in Metabase, allows us to use the object if already in memory
 
         Returns:
             None -- self.models_exposed is populated through this method.
